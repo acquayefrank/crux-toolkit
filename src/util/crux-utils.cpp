@@ -31,9 +31,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/asio.hpp>
 #include <regex>
-#include <pwiz/utility/misc/SHA1.h>
 #include "FileUtils.h"
 #include "crux_version.h"
+
+#define ULONG_MAX 0xFFFFFFFE
+#include <pwiz/utility/misc/SHA1.h>
 
 using namespace std;
 
@@ -1497,7 +1499,7 @@ std::string generate_uuid_v4() {
     auto seedString = randomPool.str();
 
     CSHA1 enviroHash;
-    enviroHash.Update((const uint8_t *) seedString.c_str(), seedString.size());
+    enviroHash.Update((const uint8_t *) seedString.c_str(), (unsigned int)seedString.size());
     enviroHash.Final();
 
     unsigned char hashBytes[30];
