@@ -65,6 +65,7 @@ int TideSearchApplication::main(const vector<string>& input_files) {
 }
 
 int TideSearchApplication::main(const vector<string>& input_files, const string input_index) {
+
   carp(CARP_INFO, "Running tide-search...");
 
   // Brief output only works with text-format.

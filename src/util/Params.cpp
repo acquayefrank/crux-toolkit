@@ -877,6 +877,9 @@ InitStringParam("protein-name-separator", ",",
     "Output in tab-delimited text only the file name, scan number, charge, score and peptide."
     "Incompatible with mzid-output=T, pin-output=T, pepxml-output=T or txt-output=F.",
     "Available for tide-search", true);
+  InitBoolParam("mztab-output", false,
+  "Output a tab-delimited mzTab results file to the output directory.",
+  "Available for tide-search", true);
   /*
    * Comet parameters
    */
