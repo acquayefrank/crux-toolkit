@@ -25,6 +25,8 @@
 
 using namespace std;
 
+extern string tide_index_mzTab_file;
+
 std::string getModifiedPeptideSeq(const pb::Peptide* peptide, const ProteinVec* proteins);
 
 struct PbPeptideSortGreater {
@@ -36,11 +38,12 @@ struct PbPeptideSortGreater {
 
 
 class TideIndexApplication : public CruxApplication {
+  
 
   friend class TideSearchApplication;
   friend class DIAmeterApplication;
  public:
-
+  static string fasta_file_path;
   /**
    * Constructor
    */
@@ -247,6 +250,8 @@ class TideIndexApplication : public CruxApplication {
 
   static TideIndexPeptide* readNextPeptide(FILE* fp, ProteinVec& vProteinHeaderSequnce, int sourceId);
   void dump_peptides_to_binary_file(vector<TideIndexPeptide> *peptide_list, string pept_file);
+
+  string get_mzTab_mods(string mods_spec, string nterm_peptide_mods_spec);
 };
 
 #endif

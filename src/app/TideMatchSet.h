@@ -19,6 +19,7 @@ using namespace std;
 
 typedef vector<const pb::Protein*> ProteinVec;
 
+
 class TideMatchSet {
 
  public:
@@ -109,6 +110,12 @@ class TideMatchSet {
     bool decoyFile,
     bool multiDecoy,
     bool compute_sp
+  );
+
+  static void writeMZTabHeaders(
+    ofstream* file,
+    std::string tide_index_params = "", // path to tide index params, a defualt value is provided to ensure the code that does not break in some places.
+    std::string tide_search_params = "" // path to tide search params, a default value is provided to ensure the code does not break in some places.
   );
 
   // added by Yang
@@ -228,6 +235,26 @@ class TideMatchSet {
    * Helper function for tab delimited report function
    */
   void writeToFile(
+    ofstream* file,
+    int top_n,
+    int decoys_per_target,
+    const vector<Arr::iterator>& vec,
+    const string& spectrum_filename,
+    const Spectrum* spectrum,
+    int charge,
+    const ActivePeptideQueue* peptides,
+    const ProteinVec& proteins,
+    const vector<const pb::AuxLocation*>& locations,
+    const map<Arr::iterator, FLOAT_T>& delta_cn_map,
+    const map<Arr::iterator, FLOAT_T>& delta_lcn_map,
+    const map<Arr::iterator, pair<const SpScorer::SpScoreData, int> >* sp_map,
+    boost::mutex * rwlock
+  );
+
+  /**
+   * Helper function for MZTab
+   */
+  void writeMZTabToFile(
     ofstream* file,
     int top_n,
     int decoys_per_target,

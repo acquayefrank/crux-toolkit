@@ -142,7 +142,34 @@ static const char* match_column_strings[NUMBER_MATCH_COLUMNS] = {
   "q-value",
   "posterior_error_prob",
   "peptide",
-  "proteinIds"
+  "proteinIds",
+  // mzTab Headers
+  "PSH",
+  "sequence",
+  "PSM_ID",
+  "accession",
+  "unique",
+  "database",
+  "database_version",
+  "search_engine",
+  "search_engine_score[1]",
+  "search_engine_score[2]",
+  "modifications",
+  "retention_time",
+  "charge",
+  "exp_mass_to_charge",
+  "calc_mass_to_charge",
+  "spectra_ref",
+  "pre",
+  "post",
+  "start",
+  "end",
+  "opt_ms_run[1]_spectrum_neutral_mass",
+  "opt_ms_run[1]_delta_cn",
+  "opt_ms_run[1]_delta_lcn",
+  "opt_ms_run[1]_distinct_matches/spectrum",
+  "opt_ms_run[1]_target/decoy",
+
 };
 
 /**

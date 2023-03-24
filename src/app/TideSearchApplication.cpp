@@ -16,12 +16,17 @@
 #include "util/StringUtils.h"
 #include <math.h> //Added by Andy Lin
 #include <map> //Added by Andy Lin
+#include "crux_version.h"
 
 #define TAILOR_QUANTILE_TH 0.01
 #define TAILOR_OFFSET 5.0
 
 bool TideSearchApplication::HAS_DECOYS = false;
 bool TideSearchApplication::PROTEIN_LEVEL_DECOYS = false;
+
+// std::string tide_index_mzTab_file = "tide-index.params.mztab" This has been declared in TideIndexApplication.cpp hence not needed here; 
+std::string tide_search_mzTab_file = "tide-search.params.mztab";
+std::string TideSearchApplication::fasta_file_path = "";
 
 /* This constant is the product of the original "magic number" (10000,
  * on line 4622 of search28.c) that was used to rescale the XCorr
@@ -67,7 +72,7 @@ int TideSearchApplication::main(const vector<string>& input_files) {
 int TideSearchApplication::main(const vector<string>& input_files, const string input_index) {
 
   carp(CARP_INFO, "Running tide-search...");
-
+  bool is_mztab_output = Params::GetBool("mztab-output");
   // Brief output only works with text-format.
   if ( Params::GetBool("brief-output") ) {
     if ( !Params::GetBool("txt-output") ||
@@ -99,6 +104,8 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
   string peptides_file = FileUtils::Join(index, "pepix");
   string proteins_file = FileUtils::Join(index, "protix");
   string auxlocs_file = FileUtils::Join(index, "auxlocs");
+  string tide_index_mzTab_file_path = FileUtils::Join(index, tide_index_mzTab_file);
+  string tide_search_mzTab_file_path = FileUtils::Join(index, tide_search_mzTab_file);
 
   // Check scan-number parameter
   string scan_range = Params::GetString("scan-number");
@@ -312,22 +319,108 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
   ss << Params::GetString("enzyme") << '-' << Params::GetString("digestion");
   TideMatchSet::CleavageType = ss.str();
   if (!Params::GetBool("concat")) {
-    string target_file_name = make_file_path("tide-search.target.txt");
+    string target_file_name;
+    string decoy_file_name;
+    if(is_mztab_output){
+      target_file_name = make_file_path("tide-search.target.mztab");
+    }else{
+      target_file_name = make_file_path("tide-search.target.txt");
+    }
+    
     target_file = create_stream_in_path(target_file_name.c_str(), NULL, overwrite);
     output_file_name_ = target_file_name;
     if (HAS_DECOYS) {
-      string decoy_file_name = make_file_path("tide-search.decoy.txt");
+      if(is_mztab_output){
+        decoy_file_name = make_file_path("tide-search.decoy.mztab");
+      }else{
+        decoy_file_name = make_file_path("tide-search.decoy.txt");
+      }
+      
       decoy_file = create_stream_in_path(decoy_file_name.c_str(), NULL, overwrite);
     }
   } else {
-    string concat_file_name = make_file_path("tide-search.txt");
+    string concat_file_name;
+    if(is_mztab_output){
+      concat_file_name = make_file_path("tide-search.mztab");
+    }else{
+      concat_file_name = make_file_path("tide-search.txt");
+    }
+    
     target_file = create_stream_in_path(concat_file_name.c_str(), NULL, overwrite);
     output_file_name_ = concat_file_name;
   }
 
+  
+  if(is_mztab_output){
+     try {
+    
+      ofstream mzTabStream(tide_search_mzTab_file_path);
+      
+      mzTabStream << "MTD\tsoftware[2]-settings[1]\tuse-tailor-calibration = " << Params::GetBool("use-tailor-calibration") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[2]\tmod-precision = " << Params::GetInt("mod-precision") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[3]\tauto-precursor-window = " << Params::GetString("auto-precursor-window") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[4]\tmax-precursor-charge = " << Params::GetInt("max-precursor-charge") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[5]\tprecursor-window = " << Params::GetDouble("precursor-window") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[6]\tprecursor-window-type = " << Params::GetString("precursor-window-type") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[7]\tauto-mz-bin-width = " << Params::GetString("auto-mz-bin-width") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[8]\tcompute-sp = " << Params::GetBool("compute-sp") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[9]\tdeisotope = " << Params::GetDouble("deisotope") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[10]\texact-p-value = " << Params::GetBool("exact-p-value") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[11]\tisotope-error = " << Params::GetString("isotope-error") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[12]\tmin-peaks = " << Params::GetInt("min-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[13]\tmz-bin-offset = " << Params::GetDouble("mz-bin-offset") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[14]\tmz-bin-width = " << Params::GetDouble("mz-bin-width") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[15]\tpeptide-centric-search = " << Params::GetBool("peptide-centric-search") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[16]\tscore-function = " << Params::GetString("score-function") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[17]\tfragment-tolerance = " << Params::GetDouble("fragment-tolerance") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[18]\tevidence-granularity = " << Params::GetInt("evidence-granularity") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[19]\tremove-precursor-peak = " << Params::GetBool("remove-precursor-peak") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[20]\tremove-precursor-tolerance = " << Params::GetDouble("remove-precursor-tolerance") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[21]\tscan-number = " << Params::GetString("scan-number") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[22]\tskip-preprocessing = " << Params::GetBool("skip-preprocessing") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[23]\tspectrum-charge = " << Params::GetString("spectrum-charge") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[24]\tspectrum-max-mz = " << Params::GetDouble("spectrum-max-mz") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[25]\tspectrum-min-mz = " << Params::GetDouble("spectrum-min-mz") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[26]\tuse-flanking-peaks = " << Params::GetBool("use-flanking-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[27]\tuse-neutral-loss-peaks = " << Params::GetDouble("use-neutral-loss-peaks") << "\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[28]\tnum-threads = " << Params::GetInt("num-threads") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[29]\tpm-charges = " << Params::GetString("pm-charges") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[30]\tpm-max-frag-mz = " << Params::GetDouble("pm-max-frag-mz") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[31]\tpm-max-precursor-delta-ppm = " << Params::GetDouble("pm-max-precursor-delta-ppm") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[32]\tpm-max-precursor-mz = " << Params::GetDouble("pm-max-precursor-mz") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[33]\tpm-max-scan-separation = " << Params::GetInt("pm-max-scan-separation") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[34]\tpm-min-common-frag-peaks = " << Params::GetInt("pm-min-common-frag-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[35]\tpm-min-frag-mz = " << Params::GetDouble("pm-min-frag-mz") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[36]\tpm-min-peak-pairs = " << Params::GetInt("pm-min-peak-pairs") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[37]\tpm-min-precursor-mz = " << Params::GetDouble("pm-min-precursor-mz") <<"\n"; 
+      mzTabStream << "MTD\tsoftware[2]-settings[38]\tpm-min-scan-frag-peaks = " << Params::GetInt("pm-min-scan-frag-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[39]\tpm-pair-top-n-frag-peaks = " << Params::GetInt("pm-pair-top-n-frag-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[40]\tpm-top-n-frag-peaks = " << Params::GetInt("pm-top-n-frag-peaks") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[41]\tconcat = " << Params::GetBool("concat") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[42]\tcfile-column = " << Params::GetBool("file-column") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[43]\tmass-precision = " << Params::GetInt("mass-precision") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[44]\tprecision = " << Params::GetInt("precision") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[45]\tspectrum-parser = " << Params::GetString("spectrum-parser") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[46]\ttop-match = " << Params::GetInt("top-match") <<"\n";
+      mzTabStream << "MTD\tsoftware[2]-settings[47]\tuse-z-line = " << Params::GetInt("use-z-line") <<"\n";
+
+      mzTabStream.close();
+
+    } catch (...){
+      carp(CARP_INFO, "mzTab file was not created");
+    }
+  }
+ 
+
   if (target_file) {
-    TideMatchSet::writeHeaders(target_file, false, decoysPerTarget > 1, compute_sp);
-    TideMatchSet::writeHeaders(decoy_file, true, decoysPerTarget > 1, compute_sp);
+    if(is_mztab_output){
+      TideMatchSet::writeMZTabHeaders(target_file, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
+      TideMatchSet::writeMZTabHeaders(decoy_file, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
+    }else{
+      TideMatchSet::writeHeaders(target_file, false, decoysPerTarget > 1, compute_sp);
+      TideMatchSet::writeHeaders(decoy_file, true, decoysPerTarget > 1, compute_sp);
+    }
+    
   }
 
   vector<InputFile> sr = getInputFiles(input_files);
@@ -503,6 +596,7 @@ SpectrumCollection* TideSearchApplication::loadSpectra(const string& file) {
 }
 
 void TideSearchApplication::search(void* threadarg) {
+   
   struct thread_data *my_data = (struct thread_data *) threadarg;
 
   const string& spectrum_filename = my_data->spectrum_filename;
@@ -703,7 +797,7 @@ void TideSearchApplication::search(void* threadarg) {
 
         matches.exact_pval_search_ = exact_pval_search;
         matches.cur_score_function_ = curScoreFunction;
-
+        
         matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                        spectrum, charge, active_peptide_queue, proteins,
                        locations, compute_sp, true, locks_array[LOCK_RESULTS]);
@@ -1182,10 +1276,12 @@ void TideSearchApplication::search(void* threadarg) {
         matches.cur_score_function_ = curScoreFunction;
 
         if (curScoreFunction == RESIDUE_EVIDENCE_MATRIX && exact_pval_search_ == false) {
+          
           matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                          spectrum, charge, active_peptide_queue, proteins,
                          locations, compute_sp, true, locks_array[LOCK_RESULTS]);
         } else {
+          
           matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                          spectrum, charge, active_peptide_queue, proteins,
                          locations, compute_sp, false, locks_array[LOCK_RESULTS]);
@@ -1322,6 +1418,7 @@ void TideSearchApplication::search(
   }
 
   // Searches through part of the spec charge vector while waiting for threads are busy
+  
   search( (void *) &(thread_data_array[0]) );
 
   // Join threads
@@ -1490,7 +1587,13 @@ void TideSearchApplication::collectScoresCompiled(
 void TideSearchApplication::convertResults() const {
   PSMConvertApplication converter;
   if (!Params::GetBool("concat")) {
-    string target_file_name = make_file_path("tide-search.target.txt");
+    string target_file_name;
+    if(Params::GetBool("mztab-output")) {
+      target_file_name = make_file_path("tide-search.target.mztab");
+    }else{
+      target_file_name = make_file_path("tide-search.target.txt");
+    }
+    
     if (Params::GetBool("pin-output")) {
       converter.convertFile("tsv", "pin", target_file_name, "tide-search.target.", Params::GetString("protein-database"), true);
     }
@@ -1505,7 +1608,12 @@ void TideSearchApplication::convertResults() const {
     }
 
     if (HAS_DECOYS) {
-      string decoy_file_name = make_file_path("tide-search.decoy.txt");
+      string decoy_file_name;
+      if(Params::GetBool("mztab-output")) {
+      decoy_file_name = make_file_path("tide-search.decoy.mztab");
+    }else{
+      decoy_file_name = make_file_path("tide-search.decoy.txt");
+    }
       if (Params::GetBool("pin-output")) {
         converter.convertFile("tsv", "pin", decoy_file_name, "tide-search.decoy.", Params::GetString("protein-database"), true);
       }
@@ -1520,7 +1628,13 @@ void TideSearchApplication::convertResults() const {
       }
     }
   } else {
-    string concat_file_name = make_file_path("tide-search.txt");
+    string concat_file_name;
+    if(Params::GetBool("mztab-output")) {
+      concat_file_name = make_file_path("tide-search.mztab");
+    }else{
+      concat_file_name = make_file_path("tide-search.txt");
+    }
+    
     if (Params::GetBool("pin-output")) {
       converter.convertFile("tsv", "pin", concat_file_name, "tide-search.", Params::GetString("protein-database"), true);
     }
@@ -1705,9 +1819,16 @@ vector<string> TideSearchApplication::getOptions() const {
 
 vector< pair<string, string> > TideSearchApplication::getOutputs() const {
   vector< pair<string, string> > outputs;
-  outputs.push_back(make_pair("tide-search.target.txt",
+  if(Params::GetBool("mztab-output")) {
+    outputs.push_back(make_pair("tide-search.mztab",
+      "a tab-delimited text file containing the PSMs. See <a href=\""
+      "../file-formats/mztab-format.html\">mzTab file format</a> for a list of the fields."));
+  }else{
+     outputs.push_back(make_pair("tide-search.target.txt",
     "a tab-delimited text file containing the target PSMs. See <a href=\""
     "../file-formats/txt-format.html\">txt file format</a> for a list of the fields."));
+  }
+ 
   outputs.push_back(make_pair("tide-search.decoy.txt",
     "a tab-delimited text file containing the decoy PSMs. This file will only "
     "be created if the index was created with decoys."));
@@ -2002,6 +2123,7 @@ void TideSearchApplication::processParams() {
   } else if (FileUtils::IsRegularFile(index)) {
     // Index is FASTA file
     carp(CARP_INFO, "Creating index from '%s'", index.c_str());
+    TideSearchApplication::fasta_file_path = index.c_str();
     string targetIndexName = Params::GetString("store-index");
     if (targetIndexName.empty()) {
       targetIndexName = FileUtils::Join(Params::GetString("output-dir"),

@@ -15,6 +15,7 @@
 #include "util/MathUtil.h"
 
 using namespace std;
+extern string tide_search_mzTabFile;
 
 /**
  * Locks for multi-threading in Tide.
@@ -51,6 +52,7 @@ struct ScSortByMz {
 };
 
 class TideSearchApplication : public CruxApplication {
+  
   private:
   //Added by Andy Lin in Feb 2016
   //function determines which mass bin a precusor mass is in
@@ -170,7 +172,7 @@ class TideSearchApplication : public CruxApplication {
   std::map<std::string, SpectrumCollection*> spectra_;
 
  public:
-
+  static string fasta_file_path;
   // See TideSearchApplication.cpp for descriptions of these two constants
   static const double XCORR_SCALING;
   static const double RESCALE_FACTOR;

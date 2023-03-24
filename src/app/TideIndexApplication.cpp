@@ -33,6 +33,7 @@
 #include "ParamMedicApplication.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include "crux_version.h"
 
 #include <regex>
 #include <assert.h>
@@ -43,7 +44,8 @@
 #define CHECK(x) GOOGLE_CHECK(x)
 
 std::string peptideFile = "pepTarget.txt";
-std::string mzTabFile = "tide-index.params.mztab";
+std::string tide_index_mzTab_file = "tide-index.params.mztab";
+std::string TideIndexApplication::fasta_file_path = "";
 
 extern void AddTheoreticalPeaks(const vector<const pb::Protein*>& proteins,
                                 const string& input_filename,
@@ -131,14 +133,15 @@ int TideIndexApplication::main(
     ofstream* out_decoy_fasta = GeneratePeptides::canGenerateDecoyProteins() ?
     create_stream_in_path(make_file_path(
       "tide-index.decoy.fasta").c_str(), NULL, overwrite) : NULL;
-*/    
+*/
+  TideIndexApplication::fasta_file_path = fasta;
   string out_proteins = FileUtils::Join(index, "protix");
   string out_peptides = FileUtils::Join(index, "pepix");
   string auxLocsPbFile = FileUtils::Join(index, "auxlocs");
   string modless_peptides = out_peptides + ".nomods.tmp";
   string peakless_peptides = out_peptides + ".nopeaks.tmp";
   string pathPeptideFile = FileUtils::Join(index, peptideFile);
-  string pathMZTabFile = FileUtils::Join(index, mzTabFile);
+  string pathMZTabFile = FileUtils::Join(index, tide_index_mzTab_file);
 
   if (create_output_directory(index.c_str(), overwrite) != 0) {
     carp(CARP_FATAL, "Error creating index directory");
@@ -890,42 +893,37 @@ int TideIndexApplication::main(
   carp(CARP_INFO, "Generated %lu decoy peptides.", decoy_count);
   carp(CARP_INFO, "Generated %lu peptides in total.", peptide_cnt + decoy_count);
     
-
   try {
     
     ofstream mzTabStream(pathMZTabFile);
-    
-    mzTabStream << "mzTab-version\t1.0.0\n";
-    mzTabStream << "mzTab-mode\tSummary\n";
-    mzTabStream << "mzTab-type\tIdentification\n";
-    mzTabStream << "description\tTide Index Params\n";
-    mzTabStream << "tide-index-settings[1]\tauto-modifications-spectra = " << Params::GetString("auto-modifications-spectra") <<"\n";
-    mzTabStream << "tide-index-settings[2]\tclip-nterm-methionine = " << Params::GetString("clip-nterm-methionine") <<"\n";
-    mzTabStream << "tide-index-settings[3]\tisotopic-mass = " << Params::GetString("isotopic-mass") <<"\n";
-    mzTabStream << "tide-index-settings[4]\tmax-length = " << Params::GetInt("max-length") <<"\n";
-    mzTabStream << "tide-index-settings[5]\tmax-mass = " << Params::GetDouble("max-mass") <<"\n";
-    mzTabStream << "tide-index-settings[6]\tmin-length = " << Params::GetInt("min-length") <<"\n";
-    mzTabStream << "tide-index-settings[7]\tmin-mass = " << Params::GetDouble("min-mass") <<"\n";
-    mzTabStream << "tide-index-settings[8]\tcterm-peptide-mods-spec = " << Params::GetString("cterm-peptide-mods-spec") <<"\n";
-    mzTabStream << "tide-index-settings[9]\tcterm-protein-mods-spec = " << Params::GetString("cterm-protein-mods-spec") <<"\n";
-    mzTabStream << "tide-index-settings[10]\tmax-mods = " << Params::GetInt("max-mods") <<"\n";
-    mzTabStream << "tide-index-settings[11]\tmin-mods = " << Params::GetInt("min-mods") <<"\n";
-    mzTabStream << "tide-index-settings[12]\tmod-precision = " << Params::GetInt("mod-precision") <<"\n";
-    mzTabStream << "tide-index-settings[13]\tmods-spec = " << Params::GetString("mods-spec") <<"\n";
-    mzTabStream << "tide-index-settings[14]\tnterm-peptide-mods-spec = " << Params::GetString("nterm-peptide-mods-spec") <<"\n";
-    mzTabStream << "tide-index-settings[15]\tnterm-protein-mods-spec = " << Params::GetString("nterm-protein-mods-spec") <<"\n";
-    mzTabStream << "tide-index-settings[16]\tauto-modifications = " << Params::GetString("auto-modifications") <<"\n";
-    mzTabStream << "tide-index-settings[17]\tallow-dups = " << Params::GetString("allow-dups") <<"\n";
-    mzTabStream << "tide-index-settings[18]\tdecoy-format = " << Params::GetString("decoy-format") <<"\n";
-    mzTabStream << "tide-index-settings[19]\tkeep-terminal-aminos = " << Params::GetString("keep-terminal-aminos") <<"\n";
-    mzTabStream << "tide-index-settings[20]\tnum-decoys-per-target = " << numDecoys <<"\n";
-    mzTabStream << "tide-index-settings[21]\tseed = " << Params::GetString("seed") <<"\n";
-    mzTabStream << "tide-index-settings[22]\tcustom-enzyme = " << Params::GetString("custom-enzyme") <<"\n";
-    mzTabStream << "tide-index-settings[23]\tdigestion = " << Params::GetString("digestion") <<"\n";
-    mzTabStream << "tide-index-settings[24]\tenzyme = " << Params::GetString("enzyme") <<"\n";
-    mzTabStream << "tide-index-settings[25]\tmissed-cleavages = " << Params::GetInt("missed-cleavages") <<"\n";
-    mzTabStream << "tide-index-settings[26]\tdecoy-prefix = " << Params::GetString("decoy-prefix") <<"\n";
-    mzTabStream << "tide-index-settings[27]\tmass-precision = " << Params::GetInt("mass-precision") <<"\n";
+   
+    mzTabStream << "MTD\tsoftware[1]-settings[1]\tauto-modifications-spectra = " << Params::GetString("auto-modifications-spectra") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[2]\tclip-nterm-methionine = " << Params::GetString("clip-nterm-methionine") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[3]\tisotopic-mass = " << Params::GetString("isotopic-mass") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[4]\tmax-length = " << Params::GetInt("max-length") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[5]\tmax-mass = " << Params::GetDouble("max-mass") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[6]\tmin-length = " << Params::GetInt("min-length") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[7]\tmin-mass = " << Params::GetDouble("min-mass") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[8]\tcterm-peptide-mods-spec = " << Params::GetString("cterm-peptide-mods-spec") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[9]\tcterm-protein-mods-spec = " << Params::GetString("cterm-protein-mods-spec") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[10]\tmax-mods = " << Params::GetInt("max-mods") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[11]\tmin-mods = " << Params::GetInt("min-mods") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[12]\tmod-precision = " << Params::GetInt("mod-precision") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[13]\tmods-spec = " << Params::GetString("mods-spec") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[14]\tnterm-peptide-mods-spec = " << Params::GetString("nterm-peptide-mods-spec") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[15]\tnterm-protein-mods-spec = " << Params::GetString("nterm-protein-mods-spec") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[16]\tauto-modifications = " << Params::GetString("auto-modifications") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[17]\tallow-dups = " << Params::GetString("allow-dups") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[18]\tdecoy-format = " << Params::GetString("decoy-format") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[19]\tkeep-terminal-aminos = " << Params::GetString("keep-terminal-aminos") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[20]\tnum-decoys-per-target = " << numDecoys <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[21]\tseed = " << Params::GetString("seed") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[22]\tcustom-enzyme = " << Params::GetString("custom-enzyme") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[23]\tdigestion = " << Params::GetString("digestion") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[24]\tenzyme = " << Params::GetString("enzyme") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[25]\tmissed-cleavages = " << Params::GetInt("missed-cleavages") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[26]\tdecoy-prefix = " << Params::GetString("decoy-prefix") <<"\n";
+    mzTabStream << "MTD\tsoftware[1]-settings[27]\tmass-precision = " << Params::GetInt("mass-precision") <<"\n";
 
     mzTabStream.close();
 
@@ -1290,6 +1288,11 @@ void TideIndexApplication::dump_peptides_to_binary_file(vector<TideIndexPeptide>
   }   
   fclose(fp);    
 
+}
+string TideIndexApplication::get_mzTab_mods(string mods_spec, string nterm_peptide_mods_spec){
+  bool is_digit = isdigit(mods_spec[0]);
+  // should I show fixed and variable 
+  return " ";
 }
 /*
 * Local Variables:
