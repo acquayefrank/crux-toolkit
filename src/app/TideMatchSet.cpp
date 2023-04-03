@@ -24,6 +24,7 @@
 string TideMatchSet::CleavageType;
 string TideMatchSet::decoy_prefix_;
 string fasta_file_path = "";
+int TideMatchSet::PSM_ID = 1;
 
 char TideMatchSet::match_collection_loc_[] = {0};
 char TideMatchSet::decoy_match_collection_loc_[] = {0};
@@ -49,7 +50,6 @@ void TideMatchSet::report(
   int top_matches,
   const ActivePeptideQueue* peptides, ///< peptide queue
   const ProteinVec& proteins, ///< proteins corresponding with peptides
-  const vector<const pb::AuxLocation*>& locations,  ///< auxiliary locations
   bool compute_sp ///< whether to compute sp or not
 ) {
   if (peptide_->spectrum_matches_array.empty()) {
@@ -146,10 +146,9 @@ void TideMatchSet::report(
     vector<pair<double, int> > spScoreRank;
     spScoreRank.reserve(top_matches);
     for (int cnt = 0; cnt < top_matches; ++cnt) {
-      SpScorer sp_scorer(proteins, *peptide_->spectrum_matches_array[cnt].spectrum_,
+      SpScorer sp_scorer(*peptide_->spectrum_matches_array[cnt].spectrum_,
                          peptide_->spectrum_matches_array[cnt].charge_, max_mz_);
-      pb::Peptide* pb_peptide = getPbPeptide(*peptide_);
-      sp_scorer.Score(*pb_peptide, peptide_->spectrum_matches_array[cnt].spData_);
+      sp_scorer.Score((*peptide_), peptide_->spectrum_matches_array[cnt].spData_);
       spScoreRank.push_back(make_pair(-1*peptide_->spectrum_matches_array[cnt].spData_.sp_score, cnt));
     }
     sort(spScoreRank.begin(), spScoreRank.end());
@@ -157,11 +156,10 @@ void TideMatchSet::report(
       peptide_->spectrum_matches_array[spScoreRank[i].second].spData_.sp_rank = i;
     }
   }
- 
-    // target peptide or concat search
-    ofstream* file =
-      (Params::GetBool("concat") || !peptide_->IsDecoy()) ? target_file : decoy_file;
-    writeToFile(file, peptides, proteins, locations, compute_sp);
+  // target peptide or concat search
+  ofstream* file =
+    (Params::GetBool("concat") || !peptide_->IsDecoy()) ? target_file : decoy_file;
+  writeToFile(file, peptides, proteins, compute_sp);
 }
 
 /**
@@ -171,7 +169,6 @@ void TideMatchSet::writeToFile(
   ofstream* file,
   const ActivePeptideQueue* peptides,
   const ProteinVec& proteins,
-  const vector<const pb::AuxLocation*>& locations,
   bool compute_sp ///< whether to compute sp or not
 ) {
   if (!file) {
@@ -185,27 +182,12 @@ void TideMatchSet::writeToFile(
   const Peptide* peptide = peptides->GetPeptide(0);
   const pb::Protein* protein = proteins[peptide->FirstLocProteinId()];
   int pos = peptide->FirstLocPos();
-  string proteinNames = getProteinName(*protein,
-      (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-  string flankingAAs, n_term, c_term;
-  getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-  flankingAAs = n_term + c_term;
 
   int precision = Params::GetInt("precision");
-
-  // look for other locations
-  if (peptide->HasAuxLocationsIndex()) {
-      const pb::AuxLocation* aux = locations[peptide->AuxLocationsIndex()];
-      for (int i = 0; i < aux->location_size(); ++i) {
-      const pb::Location& location = aux->location(i);
-      protein = proteins[location.protein_id()];
-      pos = location.pos();
-      proteinNames += "," + getProteinName(*protein,
-          (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-      getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-      flankingAAs += "," + n_term + c_term;
-      }
-  }
+  string proteinNames;
+  string flankingAAs;
+  peptide->GetLocationStr(proteins, TideMatchSet::decoy_prefix_, proteinNames);
+  peptide->GetFlankingAAs(proteins, flankingAAs);
 
   for (vector<Peptide::spectrum_matches>::const_iterator
         i = peptide_->spectrum_matches_array.begin();
@@ -237,11 +219,7 @@ void TideMatchSet::writeToFile(
     } else {
       *file << StringUtils::ToString(i->score1_, precision, true) << '\t';
     }
-    //Added for tailor score calibration method by AKF
-/*    if (Params::GetBool("use-tailor-calibration")) {
-      *file << StringUtils::ToString(i->tailor, precision, true) << '\t';
-    }    
-*/
+
     if (elution_window_ && !brief) {
       *file << i->elution_score_ << '\t';
     }
@@ -261,13 +239,14 @@ void TideMatchSet::writeToFile(
         }
     }
     string peptide_with_mods = peptide->SeqWithMods();    
+    string peptide_with_nomods = peptide->Seq();
     *file << peptide_with_mods;
     Crux::Peptide cruxPep = getCruxPeptide(peptide);
     
     if (!brief) {
       *file  << '\t'
              << cruxPep.getModsString() << '\t'
-             << CleavageType << '\t'
+             << peptide_with_nomods << '\t'
              << proteinNames << '\t'
              << flankingAAs;
       if (peptide->IsDecoy()) {
@@ -304,10 +283,10 @@ void TideMatchSet::report(
   int charge, ///< charge for matches
   const ActivePeptideQueue* peptides, ///< peptide queue
   const ProteinVec& proteins,  ///< proteins corresponding with peptides
-  const vector<const pb::AuxLocation*>& locations,  ///< auxiliary locations
   bool compute_sp, ///< whether to compute sp or not
   bool highScoreBest, //< indicates semantics of score magnitude
-  boost::mutex * rwlock
+  boost::mutex * rwlock,
+  int f_index
 ) {
   
   bool isMzTab = Params::GetBool("mztab-output");
@@ -329,25 +308,24 @@ void TideMatchSet::report(
 
   map<Arr::iterator, pair<const SpScorer::SpScoreData, int> > sp_map;
   if (compute_sp) {
-    SpScorer sp_scorer(proteins, *spectrum, charge, max_mz_);
+    SpScorer sp_scorer(*spectrum, charge, max_mz_);
     computeSpData(targets, &sp_map, &sp_scorer, peptides);
     computeSpData(decoys, &sp_map, &sp_scorer, peptides);
   }
-
   if(isMzTab){
     writeMZTabToFile(target_file, top_n, decoys_per_target, targets, spectrum_filename, spectrum, charge,
-              peptides, proteins, locations, delta_cn_map, delta_lcn_map,
-              compute_sp ? &sp_map : NULL, rwlock);
+              peptides, proteins, delta_cn_map, delta_lcn_map,
+              compute_sp ? &sp_map : NULL, rwlock, f_index);
     writeMZTabToFile(decoy_file, top_n, decoys_per_target, decoys, spectrum_filename, spectrum, charge,
-              peptides, proteins, locations, delta_cn_map, delta_lcn_map,
-              compute_sp ? &sp_map : NULL, rwlock);
+              peptides, proteins, delta_cn_map, delta_lcn_map,
+              compute_sp ? &sp_map : NULL, rwlock, f_index);
   }else{
     writeToFile(target_file, top_n, decoys_per_target, targets, spectrum_filename, spectrum, charge,
-              peptides, proteins, locations, delta_cn_map, delta_lcn_map,
-              compute_sp ? &sp_map : NULL, rwlock);
+                peptides, proteins, delta_cn_map, delta_lcn_map,
+                compute_sp ? &sp_map : NULL, rwlock);
     writeToFile(decoy_file, top_n, decoys_per_target, decoys, spectrum_filename, spectrum, charge,
-              peptides, proteins, locations, delta_cn_map, delta_lcn_map,
-              compute_sp ? &sp_map : NULL, rwlock);
+                peptides, proteins, delta_cn_map, delta_lcn_map,
+                compute_sp ? &sp_map : NULL, rwlock);
   }
   
 }
@@ -361,7 +339,7 @@ void TideMatchSet::writeHeadersDIA(ofstream* file, bool compute_sp) {
     PRECURSOR_INTENSITY_RANK_M0_COL, PRECURSOR_INTENSITY_RANK_M1_COL, PRECURSOR_INTENSITY_RANK_M2_COL,
     RT_DIFF_COL, DYN_FRAGMENT_PVALUE_COL, STA_FRAGMENT_PVALUE_COL,
     COELUTE_MS1_COL, COELUTE_MS2_COL, COELUTE_MS1_MS2_COL, ENSEMBLE_SCORE_COL,
-    DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, CLEAVAGE_TYPE_COL,
+    DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, UNMOD_SEQUENCE_COL,
     PROTEIN_ID_COL, FLANKING_AA_COL, TARGET_DECOY_COL
   };
 
@@ -387,7 +365,6 @@ void TideMatchSet::writeToFileDIA(
   int charge,
   const ActivePeptideQueue* peptides,
   const ProteinVec& proteins,
-  const vector<const pb::AuxLocation*>& locations,
   const map<Arr::iterator, FLOAT_T>* delta_cn_map,
   const map<Arr::iterator, FLOAT_T>* delta_lcn_map,
   const map<Arr::iterator, pair<const SpScorer::SpScoreData, int> >* sp_map,
@@ -411,26 +388,11 @@ void TideMatchSet::writeToFileDIA(
       if (idx >= top_n) { return; }
       rank = idx + 1;
 
-      const pb::Protein* protein = proteins[peptide->FirstLocProteinId()];
-      int pos = peptide->FirstLocPos();
-      string proteinNames = getProteinName(*protein, (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-      string flankingAAs, n_term, c_term;
-      getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-      flankingAAs = n_term + c_term;
-
-      // look for other locations
-      if (peptide->HasAuxLocationsIndex()) {
-         const pb::AuxLocation* aux = locations[peptide->AuxLocationsIndex()];
-         for (int j = 0; j < aux->location_size(); j++) {
-            const pb::Location& location = aux->location(j);
-              protein = proteins[location.protein_id()];
-              pos = location.pos();
-              proteinNames += "," + getProteinName(*protein, (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-              getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-              flankingAAs += "," + n_term + c_term;
-         }
-      }
-
+      string proteinNames;
+      string flankingAAs;
+      peptide->GetLocationStr(proteins, TideMatchSet::decoy_prefix_, proteinNames);
+      peptide->GetFlankingAAs(proteins, flankingAAs);
+      
       const SpScorer::SpScoreData* sp_data = sp_map ? &(sp_map->at(i).first) : NULL;
 
       // FILE_COL, SCAN_COL, CHARGE_COL, SPECTRUM_PRECURSOR_MZ_COL, SPECTRUM_NEUTRAL_MASS_COL, PEPTIDE_MASS_COL, DELTA_CN_COL, DELTA_LCN_COL,
@@ -484,12 +446,13 @@ void TideMatchSet::writeToFileDIA(
       // ENSEMBLE_SCORE_COL
       *file << StringUtils::ToString(0.0, precision, true) << '\t';
 
-      // DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, CLEAVAGE_TYPE_COL, PROTEIN_ID_COL, FLANKING_AA_COL
-      Crux::Peptide cruxPep = getCruxPeptide(peptide);      
+      // DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, UNMOD_SEQUENCE_COL, PROTEIN_ID_COL, FLANKING_AA_COL
+      Crux::Peptide cruxPep = getCruxPeptide(peptide);  
+      string peptide_with_nomods = peptide->Seq();
       *file << concatDistinctMatches << '\t'
            << peptide_with_mods << '\t'
            << cruxPep.getModsString() << '\t'
-           << CleavageType << '\t'
+           << peptide_with_nomods << '\t'
            << proteinNames << '\t'
            << flankingAAs << '\t';
 
@@ -520,7 +483,6 @@ void TideMatchSet::writeToFile(
   int charge,
   const ActivePeptideQueue* peptides,
   const ProteinVec& proteins,
-  const vector<const pb::AuxLocation*>& locations,
   const map<Arr::iterator, FLOAT_T>& delta_cn_map,
   const map<Arr::iterator, FLOAT_T>& delta_lcn_map,
   const map<Arr::iterator, pair<const SpScorer::SpScoreData, int> >* sp_map,
@@ -560,28 +522,11 @@ void TideMatchSet::writeToFile(
       }
       rank = ++(j->second);
     }
-    const pb::Protein* protein = proteins[peptide->FirstLocProteinId()];
-    int pos = peptide->FirstLocPos();
-    string proteinNames = getProteinName(*protein,
-      (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-    string flankingAAs, n_term, c_term;
-    getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-    flankingAAs = n_term + c_term;
-
-    // look for other locations
-    if (peptide->HasAuxLocationsIndex()) {
-      const pb::AuxLocation* aux = locations[peptide->AuxLocationsIndex()];
-      for (int j = 0; j < aux->location_size(); j++) {
-        const pb::Location& location = aux->location(j);
-        protein = proteins[location.protein_id()];
-        pos = location.pos();
-        proteinNames += "," + getProteinName(*protein,
-          (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-        getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-        flankingAAs += "," + n_term + c_term;
-      }
-    }
-
+    string proteinNames;
+    string flankingAAs;
+    peptide->GetLocationStr(proteins, TideMatchSet::decoy_prefix_, proteinNames);
+    peptide->GetFlankingAAs(proteins, flankingAAs);
+  
     const SpScorer::SpScoreData* sp_data = sp_map ? &(sp_map->at(i).first) : NULL;
 
     if (rwlock != NULL) { rwlock->lock(); }
@@ -659,12 +604,14 @@ void TideMatchSet::writeToFile(
       }
     }
     string peptide_with_mods = peptide->SeqWithMods();
+    string peptide_with_nomods = peptide->Seq();    
+    
     *file << peptide_with_mods; // Print the actual peptide sequence, with modifications
     Crux::Peptide cruxPep = getCruxPeptide(peptide);
     if (!brief) {
       *file << '\t'
             << cruxPep.getModsString() << '\t'
-            << CleavageType << '\t'
+            << peptide_with_nomods << '\t'
             << proteinNames << '\t'
             << flankingAAs;
       if (peptide->IsDecoy()) {
@@ -707,11 +654,11 @@ void TideMatchSet::writeMZTabToFile(
   int charge,
   const ActivePeptideQueue* peptides,
   const ProteinVec& proteins,
-  const vector<const pb::AuxLocation*>& locations,
   const map<Arr::iterator, FLOAT_T>& delta_cn_map,
   const map<Arr::iterator, FLOAT_T>& delta_lcn_map,
   const map<Arr::iterator, pair<const SpScorer::SpScoreData, int> >* sp_map,
-  boost::mutex * rwlock
+  boost::mutex * rwlock,
+  int f_index
 ) {
   
   if (!file || vec.empty()) {
@@ -719,12 +666,14 @@ void TideMatchSet::writeMZTabToFile(
   }
   
   int massPrecision = Params::GetInt("mass-precision");
-  bool concat = true;
-  
+  int precision = Params::GetInt("precision");
 
+  const bool concat = Params::GetBool("concat");
+  const bool brief = Params::GetBool("brief-output");
+  
   const int concatDistinctMatches = peptides->ActiveTargets() + peptides->ActiveDecoys();
   map<int, int> decoyWriteCount;
-
+  
   for (size_t idx = 0; idx < vec.size(); idx++) {
     const Arr::iterator& i = vec[idx];
     Peptide* peptide = peptides->GetPeptide(i->rank);
@@ -747,29 +696,14 @@ void TideMatchSet::writeMZTabToFile(
       }
       rank = ++(j->second);
     }
-    const pb::Protein* protein = proteins[peptide->FirstLocProteinId()];
-    int pos = peptide->FirstLocPos();
-    string proteinNames = getProteinName(*protein,
-      (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-    string flankingAAs, n_term, c_term;
-    getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-    flankingAAs = n_term + c_term;
 
-    // look for other locations
-    if (peptide->HasAuxLocationsIndex()) {
-      const pb::AuxLocation* aux = locations[peptide->AuxLocationsIndex()];
-      for (int j = 0; j < aux->location_size(); j++) {
-        const pb::Location& location = aux->location(j);
-        protein = proteins[location.protein_id()];
-        pos = location.pos();
-        proteinNames += "," + getProteinName(*protein,
-          (!protein->has_target_pos()) ? pos : protein->target_pos(), peptide->IsDecoy());
-        getFlankingAAs(peptide, protein, pos, &n_term, &c_term);
-        flankingAAs += "," + n_term + c_term;
-      }
-    }
-
+    string proteinNames;
+    string flankingAAs;
+    peptide->GetLocationStr(proteins, TideMatchSet::decoy_prefix_, proteinNames);
+    peptide->GetFlankingAAs(proteins, flankingAAs);
+  
     const SpScorer::SpScoreData* sp_data = sp_map ? &(sp_map->at(i).first) : NULL;
+
     if (rwlock != NULL) { rwlock->lock(); }
 
     std::string copyProteinNames = proteinNames;
@@ -791,7 +725,8 @@ void TideMatchSet::writeMZTabToFile(
     }else{
         bool unique = true;
     }
-
+    char n_term = flankingAAs[0];
+    char c_term = flankingAAs[flankingAAs.length()-1];
     Crux::Peptide cruxPep = getCruxPeptide(peptide);
 
     int start = peptide->FirstLocPos() + 1;
@@ -813,14 +748,18 @@ void TideMatchSet::writeMZTabToFile(
 
     *file << "PSM\t"; // PSH
     *file << peptide->SeqWithMods() << '\t'; // sequence
-    *file << idx << "\t"; // PSM_ID
+    *file << PSM_ID << "\t"; // PSM_ID
+    PSM_ID = PSM_ID + 1;
     *file << accession << "\t"; // accession
     *file << unique << "\t"; // unique
     *file << fasta_file_path << "\t"; // database 
-    *file << "[MS, MS:1001155, The SEQUEST result 'XCorr'.]\t"; // database_version
-    *file << "XCorr\t"; // search_engine
-    *file << "[MS, MS:1001155, The SEQUEST result 'XCorr'.]\t"; // search_engine_score[1]
-    *file << "[MS, MS:1001157, The SEQUEST result 'Sp' (protein).]\t"; // search_engine_score[2]
+    *file << "null\t"; // database_version
+    *file << "MTD\tsoftware[1]\t[MS, MS:1002575, tide-index, "  CRUX_VERSION  "]\t"; // search_engine
+    *file << StringUtils::ToString(i->xcorr_score, precision, true) << '\t'; // search_engine_score[1]
+    *file << delta_cn_map.at(i) << "\t"; // search_engine_score[2]
+    if (sp_map) {
+        *file << StringUtils::ToString(sp_data->sp_score, precision) << '\t'; //search_engine_score[3]
+    }
     *file << cruxPep.getModsString() << "\t"; // modifications
     *file << StringUtils::ToString(spectrum->RTime()) << "\t"; // retention_time
     
@@ -828,15 +767,16 @@ void TideMatchSet::writeMZTabToFile(
     *file << StringUtils::ToString(spectrum->PrecursorMZ(), massPrecision) << "\t"; // exp_mass_to_charge (spectrum_precursor_m/z)
     *file << StringUtils::ToString(peptide->Mass(), massPrecision)
           << "\t"; // calc_mass_to_charge (peptide_mass)
-    *file << "ms_run[1]:index=" << spectrum->SpectrumNumber() << "\t"; // spectra_ref
+    int ms_run_index = f_index + 1;
+    *file << "ms_run[" << ms_run_index << "]:index=" << spectrum->SpectrumNumber() << "\t"; // spectra_ref
     *file << n_term << "\t"; // pre
     *file << c_term << "\t"; // post
     *file << start << "\t"; // start
     *file << end << "\t"; // end
+    *file << rank << "\t"; //rank
     *file << StringUtils::ToString((spectrum->PrecursorMZ() - MASS_PROTON) 
                                      * charge, massPrecision)
             << '\t'; // opt_ms_run[1]_spectrum_neutral_mass
-    *file <<  "MS:1001156" << "\t"; // opt_ms_run[1]_delta_cn (delta_cn_map.at(i))
     *file << delta_lcn_map.at(i) << "\t"; // opt_ms_run[1]_delta_lcn
     *file <<  concatDistinctMatches << "\t"; // opt_ms_run[1]_distinct_matches/spectrum
 
@@ -851,7 +791,7 @@ void TideMatchSet::writeMZTabToFile(
 
     *file << endl;
     if (rwlock != NULL) { rwlock->unlock(); }
-    if(idx == 15){
+    if(PSM_ID == 15){
        exit(0);
     }
    
@@ -894,7 +834,7 @@ void TideMatchSet::writeHeaders(
     FILE_COL, SCAN_COL, CHARGE_COL, SPECTRUM_PRECURSOR_MZ_COL, SPECTRUM_NEUTRAL_MASS_COL,
     PEPTIDE_MASS_COL, DELTA_CN_COL, DELTA_LCN_COL, SP_SCORE_COL, SP_RANK_COL,
     XCORR_SCORE_COL, BY_IONS_MATCHED_COL, BY_IONS_TOTAL_COL,
-    DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, CLEAVAGE_TYPE_COL,
+    DISTINCT_MATCHES_SPECTRUM_COL, SEQUENCE_COL, MODIFICATIONS_COL, UNMOD_SEQUENCE_COL,
     PROTEIN_ID_COL, FLANKING_AA_COL, TARGET_DECOY_COL, ORIGINAL_TARGET_SEQUENCE_COL,
     DECOY_INDEX_COL
   };
@@ -995,6 +935,7 @@ void TideMatchSet::writeHeaders(
  */
 void TideMatchSet::writeMZTabHeaders(
   ofstream* file,
+  bool compute_sp,
   std::string tide_index_params,
   std::string tide_search_params
 ) {
@@ -1012,11 +953,13 @@ void TideMatchSet::writeMZTabHeaders(
   
   for(unsigned int i=0; i < tide_spectra_files.size(); i++){
     int ms_run_index = i + 1;
-    *file << "MTD\tms_run[" << ms_run_index << "1]-location\t" << tide_spectra_files[i]  <<  "\n";
+    *file << "MTD\tms_run[" << ms_run_index << "]-location\t" << tide_spectra_files[i]  <<  "\n";
   }
   *file << "MTD\tpsm_search_engine_score[1]\t[MS, MS:1001155, The SEQUEST result 'XCorr'.]\n";
   *file << "MTD\tpsm_search_engine_score[2]\t[MS, MS:1001143, The SEQUEST result 'DeltaCn'.]\n";
-  *file << "MTD\tpsm_search_engine_score[3]\t[MS, MS:1001157, The SEQUEST result 'Sp' (protein).]\n";
+  if(compute_sp){
+     *file << "MTD\tpsm_search_engine_score[3]\t[MS, MS:1001157, The SEQUEST result 'Sp' (protein).]\n";
+  }
   *file << "MTD\tsoftware[1]\t[MS, MS:1002575, tide-index, "  CRUX_VERSION  "]\n";
   
   std::string line;
@@ -1050,6 +993,7 @@ void TideMatchSet::writeMZTabHeaders(
     MZTAB_SEARCH_ENGINE,
     MZTAB_SEARCH_ENGINE_SCORE_1,
     MZTAB_SEARCH_ENGINE_SCORE_2,
+    MZTAB_SEARCH_ENGINE_SCORE_3,
     MZTAB_MODIFICATIONS,
     MZTAB_RETENTION_TIME,
     MZTAB_CHARGE,
@@ -1060,8 +1004,8 @@ void TideMatchSet::writeMZTabHeaders(
     MZTAB_POST,
     MZTAB_START,
     MZTAB_END,
+    MZTAB_RANK,
     MZTAB_OPT_MS_RUN_1_SPECTRUM_NEUTRAL_MASS,
-    MZTAB_OPT_MS_RUN_1_DELTA_CN,
     MZTAB_OPT_MS_RUN_1_DELTA_LCN,
     MZTAB_OPT_MS_RUN_1_DISTINCT_MATCHES_PER_SPEC,
     MZTAB_OPT_MS_RUN_1_TARGET_DECOY,
@@ -1071,8 +1015,11 @@ void TideMatchSet::writeMZTabHeaders(
 
   for (size_t i = 0; i < numHeaders; ++i) {
     int header = headers[i];
-     
-    colPrint(&writtenHeader, file, get_column_header(header));
+    std::string actual_header = get_column_header(header);
+    if(actual_header != "search_engine_score[3]"){
+       colPrint(&writtenHeader, file, actual_header.c_str());
+    }
+   
     
   }
    
@@ -1196,68 +1143,6 @@ void TideMatchSet::gatherTargetsAndDecoys(
   }
 }
 
-/**
- * Create a pb peptide from Tide peptide
- */
-pb::Peptide* TideMatchSet::getPbPeptide(const Peptide& peptide) {
-  pb::Peptide* pb_peptide = new pb::Peptide();
-  pb_peptide->set_id(peptide.Id());
-  pb_peptide->set_mass(peptide.Mass());
-  pb_peptide->set_length(peptide.Len());
-  if (peptide.HasAuxLocationsIndex()) {
-    pb_peptide->set_aux_locations_index(peptide.AuxLocationsIndex());
-  }
-  
-  if (peptide.IsDecoy()) {
-    pb_peptide->set_decoy_sequence(peptide.Seq());
-    pb_peptide->set_decoy_index(peptide.DecoyIdx());
-  }
-
-  // Copy over all the modifications for this Peptide
-  const ModCoder::Mod* mods;
-  int pep_mods = peptide.Mods(&mods);
-  for (int i = 0; i < pep_mods; ++i) {
-    pb_peptide->add_modifications(mods[i]);
-  }
-
-  // Copy over the Peptide's first location within the first protein
-  pb::Location* first_location = pb_peptide->mutable_first_location();
-  first_location->set_protein_id(peptide.FirstLocProteinId());
-  first_location->set_pos(peptide.FirstLocPos());
-
-  return pb_peptide;
-}
-
-/**
- * Gets the protein name with the index appended.
- */
-string TideMatchSet::getProteinName(const pb::Protein& protein, int pos, bool decoy) {
-  stringstream proteinNameStream;
-  if (decoy) {
-    proteinNameStream << decoy_prefix_; 
-  }
-  proteinNameStream << protein.name() << '(' << pos + 1 << ')';
-  return proteinNameStream.str();
-}
-
-/**
- * Gets the flanking AAs for a Tide peptide sequence
- */
-void TideMatchSet::getFlankingAAs(
-  const Peptide* peptide, ///< Tide peptide to get flanking AAs for
-  const pb::Protein* protein, ///< Tide protein for the peptide
-  int pos,  ///< location of peptide within protein
-  string* out_n,  ///< out parameter for n flank
-  string* out_c ///< out parameter for c flank
-) {
-  int idx_n = pos - 1;
-  int idx_c = pos + peptide->Len();
-  const string& seq = protein->residues();
-
-  *out_n = (idx_n >= 0) ? seq.substr(idx_n, 1) : "-";
-  *out_c = (idx_c < seq.length()) ? seq.substr(idx_c, 1) : "-";
-}
-
 void TideMatchSet::computeDeltaCns(
   const vector<Arr::iterator>& vec, // xcorr*100000000.0, high to low
   map<Arr::iterator, FLOAT_T>* delta_cn_map, // map to add delta cn scores to
@@ -1317,10 +1202,8 @@ void TideMatchSet::computeSpData(
   spData.reserve(vec.size());
   for (vector<Arr::iterator>::const_iterator i = vec.begin(); i != vec.end(); ++i) {
     spData.push_back(make_pair(*i, SpScorer::SpScoreData()));
-    Peptide& peptide = *(peptides->GetPeptide((*i)->rank));
-    pb::Peptide* pb_peptide = getPbPeptide(peptide);
-    sp_scorer->Score(*pb_peptide, spData.back().second);
-    delete pb_peptide;
+    Peptide *peptide = peptides->GetPeptide((*i)->rank);
+    sp_scorer->Score((*peptide), spData.back().second);
   }
   sort(spData.begin(), spData.end(), spGreater());
   for (size_t i = 0; i < spData.size(); ++i) {

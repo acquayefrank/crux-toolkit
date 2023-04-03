@@ -161,12 +161,16 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
   
   //Tailor score calibration does not support res-ev scores or refactored xcorrs //Added by AKF
   if (Params::GetBool("use-tailor-calibration") && exact_pval_search_ )
-    carp(CARP_FATAL, "--exact-p-value T is not implemented with Tailor score "
+    carp(CARP_FATAL, "--exact-p-value T is not implemented with the Tailor score "
                     "calibration method");
 
   if (Params::GetBool("use-tailor-calibration") && curScoreFunction == RESIDUE_EVIDENCE_MATRIX )
     carp(CARP_FATAL, "--score-function 'residue-evidence' is not implemented "
-                    "with Tailor score calibration method");
+                    "with the Tailor score calibration method");
+
+  if (Params::GetBool("use-tailor-calibration") && Params::GetBool("peptide-centric-search") )
+    carp(CARP_FATAL, "--peptide-centric-search is not implemented "
+                    "with the Tailor score calibration method");
 
   // Check compute-sp parameter
   bool compute_sp = Params::GetBool("compute-sp");
@@ -271,14 +275,12 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
                                                  &aaFreqN, &aaFreqI, &aaFreqC, &aaMass);
     delete active_peptide_queue;
   } // End calculation of amino acid frequencies.
-
+  
   // Read auxlocs index file
-  carp(CARP_INFO, "Reading auxiliary locations.");  
   vector<const pb::AuxLocation*> locations;
-  if (!ReadRecordsToVector<pb::AuxLocation>(&locations, auxlocs_file)) {
-    carp(CARP_FATAL, "Error reading index (%s)", auxlocs_file.c_str());
-  }
-  carp(CARP_DEBUG, "Read %d auxiliary locations.", locations.size());
+  if (ReadRecordsToVector<pb::AuxLocation>(&locations, auxlocs_file)) {
+    carp(CARP_INFO, "Read %d auxiliary locations.", locations.size());
+  }  
 
   // Read peptides index file
   pb::Header peptides_header;
@@ -414,8 +416,8 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
 
   if (target_file) {
     if(is_mztab_output){
-      TideMatchSet::writeMZTabHeaders(target_file, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
-      TideMatchSet::writeMZTabHeaders(decoy_file, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
+      TideMatchSet::writeMZTabHeaders(target_file, compute_sp, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
+      TideMatchSet::writeMZTabHeaders(decoy_file, compute_sp, tide_index_mzTab_file_path, tide_search_mzTab_file_path);
     }else{
       TideMatchSet::writeHeaders(target_file, false, decoysPerTarget > 1, compute_sp);
       TideMatchSet::writeHeaders(decoy_file, true, decoysPerTarget > 1, compute_sp);
@@ -459,12 +461,12 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
     }
     vector<ActivePeptideQueue*> active_peptide_queue;
     for (int i = 0; i < NUM_THREADS; i++) {
-      active_peptide_queue.push_back(new ActivePeptideQueue(peptide_reader[i]->Reader(), proteins));
+      active_peptide_queue.push_back(new ActivePeptideQueue(peptide_reader[i]->Reader(), proteins, &locations));
       active_peptide_queue[i]->SetBinSize(bin_width_, bin_offset_);
     }
-    
+    int f_index = f - sr.begin();
     search(f->OriginalName, spectra->SpecCharges(), active_peptide_queue, proteins,
-           locations, Params::GetDouble("precursor-window"),
+           Params::GetDouble("precursor-window"),
            string_to_window_type(Params::GetString("precursor-window-type")),
            Params::GetDouble("spectrum-min-mz"), Params::GetDouble("spectrum-max-mz"),
            min_scan, max_scan, Params::GetInt("min-peaks"), 
@@ -473,7 +475,9 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
            nAA, aaFreqN, aaFreqI, aaFreqC, aaMass,
            nAARes, dAAFreqN, dAAFreqI, dAAFreqC, dAAMass,
            pepHeader.mods(), pepHeader.nterm_mods(), pepHeader.cterm_mods(),
-           decoysPerTarget, &negative_isotope_errors);
+           decoysPerTarget, &negative_isotope_errors,
+           f_index
+           );
 
     if (spectraIter == spectra_.end()) {
       delete spectra;
@@ -603,7 +607,6 @@ void TideSearchApplication::search(void* threadarg) {
   const vector<SpectrumCollection::SpecCharge>* spec_charges = my_data->spec_charges;
   ActivePeptideQueue* active_peptide_queue = my_data->active_peptide_queue;
   ProteinVec& proteins = my_data->proteins;
-  vector<const pb::AuxLocation*>& locations = my_data->locations;
   double precursor_window = my_data->precursor_window;
   WINDOW_TYPE_T window_type = my_data->window_type;
   double spectrum_min_mz = my_data->spectrum_min_mz;
@@ -643,6 +646,8 @@ void TideSearchApplication::search(void* threadarg) {
 
   int* sc_index = my_data->sc_index;
   long* total_candidate_peptides = my_data->total_candidate_peptides;
+
+   int f_index = my_data->f_index;
 
   // params
   bool peptide_centric = Params::GetBool("peptide-centric-search");
@@ -800,7 +805,7 @@ void TideSearchApplication::search(void* threadarg) {
         
         matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                        spectrum, charge, active_peptide_queue, proteins,
-                       locations, compute_sp, true, locks_array[LOCK_RESULTS]);
+                       compute_sp, true, locks_array[LOCK_RESULTS], f_index);
 					   
       }  //end peptide_centric == false
     } else { //This runs curScoreFunction=BOTH_SCORE, curScoreFunction=RESIUDUE_EVIDENCE_MATRIX, and xcorr p-val
@@ -1279,12 +1284,12 @@ void TideSearchApplication::search(void* threadarg) {
           
           matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                          spectrum, charge, active_peptide_queue, proteins,
-                         locations, compute_sp, true, locks_array[LOCK_RESULTS]);
+                         compute_sp, true, locks_array[LOCK_RESULTS], f_index);
         } else {
           
           matches.report(target_file, decoy_file, top_matches, numDecoys, spectrum_filename,
                          spectrum, charge, active_peptide_queue, proteins,
-                         locations, compute_sp, false, locks_array[LOCK_RESULTS]);
+                         compute_sp, false, locks_array[LOCK_RESULTS], f_index);
         }
       } //end peptide_centric == false
     }
@@ -1325,7 +1330,6 @@ void TideSearchApplication::search(
   const vector<SpectrumCollection::SpecCharge>* spec_charges,
   vector<ActivePeptideQueue*> active_peptide_queue,
   ProteinVec& proteins,
-  vector<const pb::AuxLocation*>& locations,
   double precursor_window,
   WINDOW_TYPE_T window_type,
   double spectrum_min_mz,
@@ -1352,7 +1356,8 @@ void TideSearchApplication::search(
   const pb::ModTable& nterm_mod_table,
   const pb::ModTable& cterm_mod_table,
   int numDecoys,
-  vector<int>* negative_isotope_errors
+  vector<int>* negative_isotope_errors,
+  int f_index
 ) {
   // Create an array of locks.
   vector<boost::mutex *> locks_array;
@@ -1391,7 +1396,7 @@ void TideSearchApplication::search(
 
   for (int i = 0; i < NUM_THREADS; i++) {
     active_peptide_queue[i]->SetOutputs(
-      NULL, &locations, top_matches, compute_sp, target_file, decoy_file, highest_mz);
+      NULL, top_matches, compute_sp, target_file, decoy_file, highest_mz);
   }
 
   // Creating structs to hold information required for each thread to search through
@@ -1399,14 +1404,50 @@ void TideSearchApplication::search(
 
   vector<thread_data> thread_data_array;
   for (int i= 0; i < NUM_THREADS; i++) {
-      thread_data_array.push_back(thread_data(spectrum_filename, spec_charges, active_peptide_queue[i],
-      proteins, locations, precursor_window, window_type, spectrum_min_mz,
-      spectrum_max_mz, min_scan, max_scan, min_peaks, top_matches,
-      highest_mz, target_file, decoy_file, compute_sp,
-      i, NUM_THREADS, nAA, aaFreqN, aaFreqI, aaFreqC, aaMass,
-      nAARes, &dAAFreqN, &dAAFreqI, &dAAFreqC, &dAAMass,
-      &mod_table, &nterm_mod_table, &cterm_mod_table, numDecoys, locks_array, //TODO do I need to delete pointer somewhere?
-      bin_width_, bin_offset_, exact_pval_search_, spectrum_flag_, sc_index, total_candidate_peptides, negative_isotope_errors));
+      thread_data_array.push_back(
+        thread_data(
+          spectrum_filename, 
+          spec_charges, 
+          active_peptide_queue[i],
+          proteins, 
+          precursor_window, 
+          window_type, 
+          spectrum_min_mz,
+          spectrum_max_mz, 
+          min_scan, 
+          max_scan, 
+          min_peaks, 
+          top_matches,
+          highest_mz, 
+          target_file, 
+          decoy_file, 
+          compute_sp,
+          i, NUM_THREADS, 
+          nAA, 
+          aaFreqN, 
+          aaFreqI, 
+          aaFreqC, 
+          aaMass,
+          nAARes, 
+          &dAAFreqN, 
+          &dAAFreqI, 
+          &dAAFreqC, 
+          &dAAMass,
+          &mod_table, 
+          &nterm_mod_table, 
+          &cterm_mod_table,
+          numDecoys, 
+          locks_array, //TODO do I need to delete pointer somewhere?
+          bin_width_,
+          bin_offset_, 
+          exact_pval_search_, 
+          spectrum_flag_, 
+          sc_index, 
+          total_candidate_peptides, 
+          negative_isotope_errors, 
+          f_index
+        )
+      );
   }
 
   boost::thread_group threadgroup;
