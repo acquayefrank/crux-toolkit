@@ -288,7 +288,7 @@ void TideMatchSet::report(
   boost::mutex * rwlock,
   int f_index
 ) {
-  
+
   bool isMzTab = Params::GetBool("mztab-output");
   if (matches_->empty()) {
     return;
@@ -767,8 +767,8 @@ void TideMatchSet::writeMZTabToFile(
     *file << StringUtils::ToString(spectrum->PrecursorMZ(), massPrecision) << "\t"; // exp_mass_to_charge (spectrum_precursor_m/z)
     *file << StringUtils::ToString(peptide->Mass(), massPrecision)
           << "\t"; // calc_mass_to_charge (peptide_mass)
-    int ms_run_index = f_index + 1;
-    *file << "ms_run[" << ms_run_index << "]:index=" << spectrum->SpectrumNumber() << "\t"; // spectra_ref
+
+    *file << "ms_run[" << f_index << "]:index=" << spectrum->SpectrumNumber() << "\t"; // spectra_ref
     *file << n_term << "\t"; // pre
     *file << c_term << "\t"; // post
     *file << start << "\t"; // start

@@ -95,7 +95,7 @@ class TideMatchSet {
     bool compute_sp, ///< whether to compute sp or not
     bool highScoreBest, //< indicates semantics of score magnitude
     boost::mutex * rwlock = NULL,
-    int f_index =0
+    int f_index = 0
   );
 
   static void colPrint(

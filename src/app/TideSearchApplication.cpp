@@ -427,8 +427,12 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
 
   vector<InputFile> sr = getInputFiles(input_files);
 
+  
   // Loop through spectrum files
+  
+  
   for (vector<InputFile>::const_iterator f = sr.begin(); f != sr.end(); f++) {
+    
     if (!peptide_reader[0]) {
       for (int i = 0; i < NUM_THREADS; i++) {
         peptide_reader[i] = new HeadedRecordReader(peptides_file, &peptides_header);
@@ -464,8 +468,11 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
       active_peptide_queue.push_back(new ActivePeptideQueue(peptide_reader[i]->Reader(), proteins, &locations));
       active_peptide_queue[i]->SetBinSize(bin_width_, bin_offset_);
     }
-    int f_index = f - sr.begin();
-    search(f->OriginalName, spectra->SpecCharges(), active_peptide_queue, proteins,
+  
+
+    int f_index = (f - sr.begin()) + 1;
+    search(
+           f->OriginalName, spectra->SpecCharges(), active_peptide_queue, proteins,
            Params::GetDouble("precursor-window"),
            string_to_window_type(Params::GetString("precursor-window-type")),
            Params::GetDouble("spectrum-min-mz"), Params::GetDouble("spectrum-max-mz"),
@@ -477,7 +484,7 @@ int TideSearchApplication::main(const vector<string>& input_files, const string 
            pepHeader.mods(), pepHeader.nterm_mods(), pepHeader.cterm_mods(),
            decoysPerTarget, &negative_isotope_errors,
            f_index
-           );
+    );
 
     if (spectraIter == spectra_.end()) {
       delete spectra;
@@ -647,7 +654,7 @@ void TideSearchApplication::search(void* threadarg) {
   int* sc_index = my_data->sc_index;
   long* total_candidate_peptides = my_data->total_candidate_peptides;
 
-   int f_index = my_data->f_index;
+  int f_index = my_data->f_index;
 
   // params
   bool peptide_centric = Params::GetBool("peptide-centric-search");
