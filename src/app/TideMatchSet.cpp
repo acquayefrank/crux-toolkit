@@ -754,7 +754,7 @@ void TideMatchSet::writeMZTabToFile(
     *file << unique << "\t"; // unique
     *file << fasta_file_path << "\t"; // database 
     *file << "null\t"; // database_version
-    *file << "MTD\tsoftware[1]\t[MS, MS:1002575, tide-index, "  CRUX_VERSION  "]\t"; // search_engine
+    *file << "MTD software[1] [MS, MS:1002575, tide-index, "  CRUX_VERSION  "]\t"; // search_engine
     *file << StringUtils::ToString(i->xcorr_score, precision, true) << '\t'; // search_engine_score[1]
     *file << delta_cn_map.at(i) << "\t"; // search_engine_score[2]
     if (sp_map) {
@@ -786,8 +786,16 @@ void TideMatchSet::writeMZTabToFile(
       } else {
         *file << "target\t";
       }
-     
-      
+    
+    *file << StringUtils::ToString(i->xcorr_score, precision, true) << '\t'; // opt_ms_run[1]_xcorr_rank
+    *file << StringUtils::ToString(i->xcorr_pval, precision, false) << '\t'; // opt_ms_run[1]_exact_p_value
+    *file << "" << "\t"; // opt_ms_run[1]_refactorred_xcorr
+    *file << StringUtils::ToString(i->resEv_pval, precision, false) << '\t'; // opt_ms_run[1]_res_ev_score
+    *file << StringUtils::ToString(i->combinedPval, precision, false) << '\t'; // opt_ms_run[1]_combined_p_value 
+    *file << StringUtils::ToString(i->resEv_score, 1, true) << '\t'; //opt_ms_run[1]_res_ev_rank
+    *file << "" << "\t"; // opt_ms_run[1]_combined_p_value
+    *file << "" << "\t"; // opt_ms_run[1]_res_ev_p_value
+    *file << StringUtils::ToString(i->tailor, precision, true) << '\t';
 
     *file << endl;
     if (rwlock != NULL) { rwlock->unlock(); }
@@ -981,7 +989,8 @@ void TideMatchSet::writeMZTabHeaders(
     }
   }
   ts_in_stream.close();
-  
+
+
   const int headers[] = {
     MZTAB_PSH,
     MZTAB_SEQUENCE,
@@ -1009,18 +1018,23 @@ void TideMatchSet::writeMZTabHeaders(
     MZTAB_OPT_MS_RUN_1_DELTA_LCN,
     MZTAB_OPT_MS_RUN_1_DISTINCT_MATCHES_PER_SPEC,
     MZTAB_OPT_MS_RUN_1_TARGET_DECOY,
+    // Ensure they only show up when they must.
+    MZTAB_OPT_MS_RUN_1_XCORR_RANK,
+    MZTAB_OPT_MS_RUN_1_EXACT_P_VALUE,
+    MZTAB_OPT_MS_RUN_1_REFACTORED_XCORR,
+    MZTAB_OPT_MS_RUN_1_RES_EV_SCORE,
+    MZTAB_OPT_MS_RUN_1_COMBINED_P_VALUE,
+    MZTAB_OPT_MS_RUN_1_RES_EV_RANK,
+    MZTAB_OPT_MS_RUN_1_COMBINED_P_VALUE_RANK,
+    MZTAB_OPT_MS_RUN_1_TAILOR_SCORE,
+    MZTAB_OPT_MS_RUN_1_RES_EV_P_VALUE,
   };
   size_t numHeaders = sizeof(headers) / sizeof(int);
   bool writtenHeader = false;
 
   for (size_t i = 0; i < numHeaders; ++i) {
     int header = headers[i];
-    std::string actual_header = get_column_header(header);
-    if(actual_header != "search_engine_score[3]"){
-       colPrint(&writtenHeader, file, actual_header.c_str());
-    }
-   
-    
+    colPrint(&writtenHeader, file, get_column_header(header));
   }
    
   *file << endl;

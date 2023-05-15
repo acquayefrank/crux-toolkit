@@ -171,6 +171,15 @@ static const char* match_column_strings[NUMBER_MATCH_COLUMNS] = {
   "opt_ms_run[1]_delta_lcn",
   "opt_ms_run[1]_distinct_matches/spectrum",
   "opt_ms_run[1]_target/decoy",
+  "opt_ms_run[1]_xcorr_rank",
+  "opt_ms_run[1]_exact_p_value",
+  "opt_ms_run[1]_refactored_xcorr",
+  "opt_ms_run[1]_res_ev_score",
+  "opt_ms_run[1]_combined_p_value",
+  "opt_ms_run[1]_res_ev_rank",
+  "opt_ms_run[1]_combined_p_value_rank",
+  "opt_ms_run[1]_tailor_score",
+  "opt_ms_run[1]_res_ev_p_value"
 
 };
 
