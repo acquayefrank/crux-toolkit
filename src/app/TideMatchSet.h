@@ -41,7 +41,9 @@ class TideMatchSet {
     double resEv_pval;
     double combinedPval;
     int rank;
-    double tailor;  //Added by AKF    
+    double tailor;  //Added by AKF  
+    int by_ion_matched; 
+    int by_ion_total;  
 
     /*// added by Yang
     double prec_intensity_logrank;
