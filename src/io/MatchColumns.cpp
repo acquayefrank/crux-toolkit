@@ -157,6 +157,7 @@ static const char* match_column_strings[NUMBER_MATCH_COLUMNS] = {
   "search_engine_score[1]",
   "search_engine_score[2]",
   "search_engine_score[3]",
+  "search_engine_score[4]",
   "modifications",
   "retention_time",
   "charge",
@@ -179,7 +180,7 @@ static const char* match_column_strings[NUMBER_MATCH_COLUMNS] = {
   // "opt_ms_run[1]_combined_p_value",
   // "opt_ms_run[1]_res_ev_rank",
   // "opt_ms_run[1]_combined_p_value_rank",
-  "opt_ms_run[1]_tailor_score",
+  // "opt_ms_run[1]_tailor_score",
   // "opt_ms_run[1]_res_ev_p_value"
 
 };

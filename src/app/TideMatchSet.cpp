@@ -765,6 +765,9 @@ void TideMatchSet::writeMZTabToFile(
     if (sp_map) {
         *file << StringUtils::ToString(sp_data->sp_score, precision) << '\t'; //search_engine_score[3]
     }
+    if(Params::GetBool("use-tailor-calibration")){
+      *file << StringUtils::ToString(i->tailor, precision, true) << '\t';  //search_engine_score[4]
+    }
     *file << cruxPep.getModsString() << "\t"; // modifications
     *file << StringUtils::ToString(spectrum->RTime()) << "\t"; // retention_time
     
@@ -803,9 +806,6 @@ void TideMatchSet::writeMZTabToFile(
     // *file << StringUtils::ToString(i->resEv_score, 1, true) << '\t'; //opt_ms_run[1]_res_ev_rank
     // *file << "" << "\t"; // opt_ms_run[1]_combined_p_value
     // *file << "" << "\t"; // opt_ms_run[1]_res_ev_p_value
-    if(Params::GetBool("use-tailor-calibration")){
-      *file << StringUtils::ToString(i->tailor, precision, true) << '\t';
-    }
 
     *file << endl;
     if (rwlock != NULL) { rwlock->unlock(); }
@@ -968,6 +968,7 @@ void TideMatchSet::writeMZTabHeaders(
   bool concat = Params::GetBool("concat");
   bool brief = Params::GetBool("brief-output");
   bool is_exact_p_value = Params::GetBool("exact-p-value");
+  bool is_tailor = Params::GetBool("use-tailor-calibration");
 
   *file << "MTD\tmzTab-version\t1.0.0\n";
   *file << "MTD\tmzTab-mode\tSummary\n";
@@ -981,8 +982,13 @@ void TideMatchSet::writeMZTabHeaders(
   }
   *file << "MTD\tpsm_search_engine_score[1]\t[MS, MS:1001155, The SEQUEST result 'XCorr'.]\n";
   *file << "MTD\tpsm_search_engine_score[2]\t[MS, MS:1001143, The SEQUEST result 'DeltaCn'.]\n";
+  int search_engine_index = 3;
   if(compute_sp){
-     *file << "MTD\tpsm_search_engine_score[3]\t[MS, MS:1001157, The SEQUEST result 'Sp' (protein).]\n";
+     *file << "MTD\tpsm_search_engine_score[" << search_engine_index << "]\t[MS, MS:1001157, The SEQUEST result 'Sp' (protein).]\n";
+     search_engine_index += 1;
+  }
+  if(is_tailor){
+    *file << "MTD\tpsm_search_engine_score[" << search_engine_index << "]\t[MS, MS:1003366, tailor score]\n";
   }
   *file << "MTD\tsoftware[1]\t[MS, MS:1002575, tide-index, "  CRUX_VERSION  "]\n";
   
@@ -1019,6 +1025,7 @@ void TideMatchSet::writeMZTabHeaders(
     MZTAB_SEARCH_ENGINE_SCORE_1,
     MZTAB_SEARCH_ENGINE_SCORE_2,
     MZTAB_SEARCH_ENGINE_SCORE_3,
+    MZTAB_SEARCH_ENGINE_SCORE_4,
     MZTAB_MODIFICATIONS,
     MZTAB_RETENTION_TIME,
     MZTAB_CHARGE,
@@ -1042,7 +1049,7 @@ void TideMatchSet::writeMZTabHeaders(
     // MZTAB_OPT_MS_RUN_1_COMBINED_P_VALUE,
     // MZTAB_OPT_MS_RUN_1_RES_EV_RANK,
     // MZTAB_OPT_MS_RUN_1_COMBINED_P_VALUE_RANK,
-    MZTAB_OPT_MS_RUN_1_TAILOR_SCORE,
+    // MZTAB_OPT_MS_RUN_1_TAILOR_SCORE,
     // MZTAB_OPT_MS_RUN_1_RES_EV_P_VALUE,
   };
   size_t numHeaders = sizeof(headers) / sizeof(int);
@@ -1063,13 +1070,16 @@ void TideMatchSet::writeMZTabHeaders(
       }else{
         continue;
       }
-    }else if(header ==  MZTAB_OPT_MS_RUN_1_TAILOR_SCORE){
-      if(Params::GetBool("use-tailor-calibration")){
-        colPrint(&writtenHeader, file, get_column_header(MZTAB_OPT_MS_RUN_1_TAILOR_SCORE));
+    }else if(header == MZTAB_SEARCH_ENGINE_SCORE_4){
+      if(compute_sp && is_tailor){
+        colPrint(&writtenHeader, file, get_column_header(MZTAB_SEARCH_ENGINE_SCORE_4));
+      }else if(!compute_sp && is_tailor){
+        colPrint(&writtenHeader, file, get_column_header(MZTAB_SEARCH_ENGINE_SCORE_3));
       }else{
         continue;
       }
-    } else{
+        
+    }else{
       colPrint(&writtenHeader, file, get_column_header(header));
     }
     
