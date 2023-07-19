@@ -15,6 +15,11 @@
 #include "header.pb.h"
 #include "mod_coder.h"
 #include "io/carp.h"
+#include "util/Params.h"
+#include <regex>
+#include "unimods.h"
+#include <vector>
+
 
 using namespace std;
 
@@ -117,6 +122,66 @@ class VariableModTable {
     return true;
   }
 
+  std::string parse_unimod(const char* spec_text){
+    std::regex regexPattern("\\[Unimod:[0-9]+\\]");
+    std::string mod_specs = spec_text;
+    
+    std::string mod_spec, results, token;
+    std::smatch all_match, num_match;
+    std::regex numberRegex("\\d+");
+    Unimod::Modification mod = Unimod::Modification();
+    string isotopic_mass = Params::GetString("isotopic-mass");
+    int unimod_id;
+    std::vector<std::string> tokens;
+    std::stringstream ss(mod_specs);
+    while (std::getline(ss, token, ',')) {
+        tokens.push_back(token);
+    }
+   
+    for (std::vector<std::string>::iterator it = tokens.begin(); it != tokens.end(); ++it) {
+        mod_spec = *it;
+        
+         if (regex_search(mod_spec, all_match, regexPattern)){
+          std::string unimod = all_match.str();
+          if(regex_search(unimod, num_match, numberRegex))
+            unimod_id = stoi(num_match.str());
+            mod = Unimod::Get(unimod_id);
+            double mass;
+            if(isotopic_mass == "average"){
+              mass = mod.getAvgMass();
+            }else if (isotopic_mass == "mono"){
+              mass = mod.getMonoMass();
+            }
+            std::string new_spec_text = "";
+
+            if(mass>0){
+              new_spec_text =   mod_spec.substr(0, mod_spec.length()-unimod.length()) + "+" + std::to_string(mass);
+            }else{
+              new_spec_text =   mod_spec.substr(0, mod_spec.length()-unimod.length()) + std::to_string(mass);
+            }
+            
+            
+            if(it == tokens.end()-1){
+              results = results + new_spec_text;
+            }else{
+               results = results + new_spec_text + ",";
+            }
+           
+           
+      }else{
+        if(it == tokens.end()-1){
+          results = results + mod_spec;
+        }else{
+          results = results + mod_spec + ",";
+        }
+         
+      }
+    }
+
+    return results;
+   
+  }
+
   /**
    * @brief Parses the modspec string from the command line and loads them into
    * Protobuf collections. Loads all mod deltas into _unique_delta vector _without deduplication_.
@@ -126,7 +191,11 @@ class VariableModTable {
    * @return true - if completed successfully
    * @return false otherwise
    */
-  bool Parse(const char* spec_text, MODS_SPEC_TYPE_T mod_table = MOD_SPEC) {
+  bool Parse(const char* input_spec_text, MODS_SPEC_TYPE_T mod_table = MOD_SPEC) { 
+  
+    string tmp = parse_unimod(input_spec_text);
+    const char* spec_text = tmp.c_str();
+
     pb::ModTable* pb_mod_table_ptr = NULL;
     switch (mod_table) {
     case MOD_SPEC:
@@ -165,12 +234,16 @@ class VariableModTable {
         pos += next_pos;
       }
       int aa_len = -1, plus_pos = -1, delta_pos = -1, end_pos = -1;
-      if (mod_table == MOD_SPEC)
-        sscanf(spec_text + pos, "%*[ACDEFGHIJKLMNOPQRSTUVWY]%n%n%*[+-]%n%*[0-9.]%n",
+
+      if (mod_table == MOD_SPEC){
+          
+          sscanf(spec_text + pos, "%*[ACDEFGHIJKLMNOPQRSTUVWY]%n%n%*[+-]%n%*[0-9.]%n",
                &aa_len, &plus_pos, &delta_pos, &end_pos);
-      else 
-        sscanf(spec_text + pos, "%*[ACDEFGHIJKLMNOPQRSTUVWYX]%n%n%*[+-]%n%*[0-9.]%n",
-               &aa_len, &plus_pos, &delta_pos, &end_pos);
+      }else{
+          sscanf(spec_text + pos, "%*[ACDEFGHIJKLMNOPQRSTUVWYX]%n%n%*[+-]%n%*[0-9.]%n",
+                       &aa_len, &plus_pos, &delta_pos, &end_pos);
+      }
+
 
       if (aa_len == -1)
         return Error(spec_text, pos, "Expected amino acid symbol.");

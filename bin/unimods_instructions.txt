@@ -1,0 +1,4 @@
+1. Navigate to the crux-toolkit folder, then navigate to the bin folder
+2. Download the latest unimod xml files from http://www.unimod.org/xml/unimod.xml 
+3. Run the commad: "python unimod_parser.py unimod.xml > unimods.h"
+4. Copy the unimods.h header to src/app/tide
