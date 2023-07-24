@@ -1,5 +1,15 @@
 // Benjamin Diament
 
+/*
+* In order to update the code for the unimod parser (parse_unimod) 
+follow the instructions below:
+  1. Navigate to crux-toolkit's  bin folder this should be found at the root level of the crux-toolkit folder
+  2. Download the latest unimod xml files from http://www.unimod.org/xml/unimod.xml
+  3. Run the commad: "python unimod_parser.py unimod.xml > unimods.h"
+  4. Copy the unimods.h header to src/app/tide
+  5. Modify parse_unimod function as needed
+*/
+
 #ifndef TIDE_MODIFICATIONS_H
 #define TIDE_MODIFICATIONS_H
 
