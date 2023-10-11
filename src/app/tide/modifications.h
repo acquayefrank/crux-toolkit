@@ -140,7 +140,8 @@ class VariableModTable {
     }
 
     struct ParserResponse {
-        std::string actual_data, pb_data = "";
+        std::string actual_data;
+        std::vector<std::string> pb_data;
     };
 
     ParserResponse parse_unimod(const char* spec_text) {
@@ -148,7 +149,8 @@ class VariableModTable {
         std::regex regexPattern("\\[Unimod:[0-9]+\\]");
         std::string mod_specs = spec_text;
 
-        std::string mod_spec, actual_data, token, pb_data;
+        std::string mod_spec, actual_data, token;
+        std::vector<std::string> pb_data;
         std::smatch all_match, num_match;
         std::regex numberRegex("\\d+");
         Unimod::Modification mod = Unimod::Modification();
@@ -184,20 +186,31 @@ class VariableModTable {
 
                     if (it == tokens.end() - 1) {
                         actual_data = actual_data + new_spec_text;
-                        pb_data = pb_data + "UNIMOD:" + std::to_string(unimod_id);
                     } else {
                         actual_data = actual_data + new_spec_text + ",";
-                        pb_data = pb_data + "UNIMOD:" + std::to_string(unimod_id) + ",";
                     }
+                    std::string ptm = mod.getTitle();
+                    std::string _pb_data = "UNIMOD, UNIMOD:" + std::to_string(unimod_id) + ptm + std::to_string(mass);
+                    pb_data.push_back(_pb_data);
                 }
             } else {
                 if (it == tokens.end() - 1) {
                     actual_data = actual_data + mod_spec;
-                    pb_data = pb_data + "CHEMMOD:" + mod_spec;
                 } else {
                     actual_data = actual_data + mod_spec + ",";
-                    pb_data = pb_data + "CHEMMOD:" + mod_spec + ",";
                 }
+                size_t pos = mod_spec.find_first_of("+-");
+                if (pos != std::string::npos) {
+                    mod_spec = mod_spec.substr(pos);
+                    if (!mod_spec.empty()) {
+                        char firstChar = mod_spec[0];
+                        if(firstChar == '+') {
+                            mod_spec.erase(0, 1);  // Remove the plus sign
+                        }
+                    }
+                }
+                std::string _pb_data = "CHEMMOD, CHEMMOD:" + mod_spec + ",unknown modification,";
+                pb_data.push_back(_pb_data);
             }
         }
         response.actual_data = actual_data;
@@ -241,6 +254,7 @@ class VariableModTable {
             return false;
 
         int pos = 0;
+        int pb_data_index = 0;
         while (true) {
             char c;
             int next_pos = -1;
@@ -288,7 +302,7 @@ class VariableModTable {
                 delta *= -1;
 
             pb::Modification* mod;
-           
+
             if (limit > 1 && pb_mod_table_ptr != &pb_mod_table_)
                 limit = 1;
 
@@ -303,13 +317,14 @@ class VariableModTable {
             mod->set_amino_acids(string(spec_text + pos, aa_len));
             mod->set_delta(delta);
 
-            mod->set_name(parse_response.pb_data);
+            mod->set_name(parse_response.pb_data.at(pb_data_index));
             pos += end_pos;
             if (spec_text[pos] == '\0')
                 break;
 
             if (spec_text[pos] == ',')
                 ++pos;
+            ++pb_data_index;
         }
         return true;
     }
