@@ -189,8 +189,8 @@ class VariableModTable {
                     } else {
                         actual_data = actual_data + new_spec_text + ",";
                     }
-                    std::string ptm = mod.getTitle();
-                    std::string _pb_data = "UNIMOD, UNIMOD:" + std::to_string(unimod_id) + ptm + std::to_string(mass);
+                    std::string unimod_title = mod.getTitle();
+                    std::string _pb_data = "UNIMOD, UNIMOD:" + std::to_string(unimod_id) + ", " + unimod_title  + ", " + std::to_string(mass);
                     pb_data.push_back(_pb_data);
                 }
             } else {
@@ -209,7 +209,7 @@ class VariableModTable {
                         }
                     }
                 }
-                std::string _pb_data = "CHEMMOD, CHEMMOD:" + mod_spec + ",unknown modification,";
+                std::string _pb_data = "CHEMMOD, CHEMMOD:" + mod_spec + ", unknown modification, ";
                 pb_data.push_back(_pb_data);
             }
         }
