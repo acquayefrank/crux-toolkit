@@ -309,6 +309,11 @@ inline std::ostream& operator<<(std::ostream& os, const DetectionType& dt) {
     return os;
 }
 
+void searchPeaks(const double& mass, int charge, PpmTolerance tolerance,
+                 const vector<vector<IndexedMassSpectralPeak>>& indexedPeaks,
+                 int precursorScanIndex, const vector<Ms1ScanInfo>& ms1Scans,
+                 vector<IndexedMassSpectralPeak>& xic, int direction);
+
 }  // namespace CruxLFQ
 
 namespace std {

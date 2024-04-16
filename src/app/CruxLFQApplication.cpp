@@ -20,7 +20,6 @@ using std::string;
 using std::unordered_map;
 using std::vector;
 
-
 int CruxLFQ::NUM_ISOTOPES_REQUIRED = 2;                       // Default value is 2
 double CruxLFQ::PEAK_FINDING_PPM_TOLERANCE = 20.0;            // Default value is 20.0
 double CruxLFQ::PPM_TOLERANCE = 10.0;                         // Default value is 10.0
@@ -232,7 +231,7 @@ IndexedSpectralResults CruxLFQApplication::indexedMassSpectralPeaks(Crux::Spectr
                     if (parser == "mstoolkit") {
                         retentionTime = retentionTime * 60;
                     }
-                   
+
                     IndexedMassSpectralPeak spec_data(
                         mz,                       // mz value
                         (*peak)->getIntensity(),  // intensity

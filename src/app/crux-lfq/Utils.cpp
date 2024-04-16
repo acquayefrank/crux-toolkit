@@ -667,6 +667,27 @@ IndexedMassSpectralPeak getIndexedPeak(
     return bestPeak;
 }
 
+void searchPeaks(const double& mass, int charge, PpmTolerance tolerance,
+                 const vector<vector<IndexedMassSpectralPeak>>& indexedPeaks,
+                 int precursorScanIndex, const vector<Ms1ScanInfo>& ms1Scans,
+                 vector<IndexedMassSpectralPeak>& xic, int direction) {
+    int missedScans = 0;
+    for (int t = precursorScanIndex + direction; t >= 0 && t < ms1Scans.size(); t += direction) {
+        auto peak = getIndexedPeak(mass, t, tolerance, charge, indexedPeaks);
+
+        if (peak.zeroBasedMs1ScanIndex == -1 && t != precursorScanIndex) {
+            missedScans++;
+        } else if (peak.zeroBasedMs1ScanIndex != -1) {
+            missedScans = 0;
+            xic.push_back(peak);
+        }
+
+        if (missedScans > MISSED_SCANS_ALLOWED) {
+            break;
+        }
+    }
+}
+
 vector<IndexedMassSpectralPeak> peakFind(
     double idRetentionTime, const double& mass, int charge, const string& spectra_file,
     PpmTolerance tolerance,
@@ -675,47 +696,24 @@ vector<IndexedMassSpectralPeak> peakFind(
     vector<IndexedMassSpectralPeak> xic;
     vector<Ms1ScanInfo> ms1Scans = _ms1Scans[spectra_file];
     int precursorScanIndex = -1;
-    for (const Ms1ScanInfo& ms1Scan : ms1Scans) {
-        if (ms1Scan.retentionTime < idRetentionTime) {
-            precursorScanIndex = ms1Scan.zeroBasedMs1ScanIndex;
-        } else {
-            break;
-        }
+    auto it = std::lower_bound(
+        ms1Scans.begin(), ms1Scans.end(), idRetentionTime,
+        [](const Ms1ScanInfo& scan, double time) {
+            return scan.retentionTime < time;
+        });
+
+    if (it != ms1Scans.begin()) {
+        precursorScanIndex = (--it)->zeroBasedMs1ScanIndex;
     }
 
-    // go right
-    int missedScans = 0;
-    for (int t = precursorScanIndex; t < ms1Scans.size(); t++) {
-        auto peak = getIndexedPeak(mass, t, tolerance, charge, indexedPeaks);
+    // Reserve memory for xic
+    xic.reserve(ms1Scans.size());
 
-        if (peak.zeroBasedMs1ScanIndex == -1 && t != precursorScanIndex) {
-            missedScans++;
-        } else if (peak.zeroBasedMs1ScanIndex != -1) {
-            missedScans = 0;
-            xic.push_back(peak);
-        }
+    // Search peaks to the right
+    searchPeaks(mass, charge, tolerance, indexedPeaks, precursorScanIndex, ms1Scans, xic, 1);
 
-        if (missedScans > MISSED_SCANS_ALLOWED) {
-            break;
-        }
-    }
-
-    // go left
-    missedScans = 0;
-    for (int t = precursorScanIndex - 1; t >= 0; t--) {
-        auto peak = getIndexedPeak(mass, t, tolerance, charge, indexedPeaks);
-
-        if (peak.zeroBasedMs1ScanIndex == -1 && t != precursorScanIndex) {
-            missedScans++;
-        } else if (peak.zeroBasedMs1ScanIndex != -1) {
-            missedScans = 0;
-            xic.push_back(peak);
-        }
-
-        if (missedScans > MISSED_SCANS_ALLOWED) {
-            break;
-        }
-    }
+    // Search peaks to the left
+    searchPeaks(mass, charge, tolerance, indexedPeaks, precursorScanIndex, ms1Scans, xic, -1);
 
     std::sort(
         xic.begin(), xic.end(),
