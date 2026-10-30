@@ -1,0 +1,71 @@
+# Per-issue research record. Copy to issue-<N>.yaml (e.g. issue-573.yaml).
+# Allowed values are listed in comments; summarize.py rejects anything else.
+# Use null for "unknown / not yet". Dates are ISO (YYYY-MM-DD).
+
+issue: 0                      # GitHub issue number in crux-toolkit/crux-toolkit
+title: ""
+roadmap_phase: 0              # Phase number in specs/roadmap.md
+category: silent-wrong-result # silent-wrong-result | crash | build | usability | enhancement
+date_started: null
+date_closed: null
+record_filled: null           # Date this record was last updated (back-fill check, see protocol)
+
+reproduction:
+  status: null                # yes | no | already-fixed
+  test_commit: null           # Commit SHA that adds the failing/reproducing test
+  test_layer: null            # unit | golden | invariant | smoke
+  notes: ""
+
+# One entry per AI attempt (definition: research/protocol.md).
+ai_attempts:
+  - id: 1
+    date: null
+    model: claude-opus-5-5    # Exact model ID
+    tool: "Claude Code 2.1.314"
+    transcript: null          # Path under research/evidence/issue-<N>/transcripts/
+    commit: null              # SHA or branch of the candidate patch, if committed
+    # Result of each layer: pass | fail | not-run | not-applicable
+    layers:
+      smoke: not-run
+      unit: not-run
+      golden: not-run
+      invariant: not-run
+      reviewer: not-run       # Investigator review
+      maintainer: not-run     # Upstream review
+    # outcome, mutually exclusive, first match wins:
+    #   accepted            - merged as proposed, or with edits that don't change behaviour
+    #   caught-by-test      - an automated layer (smoke/unit/golden/invariant) failed
+    #   superficially-right - passed every automated layer that ran but was found wrong
+    #                         by a human or post-merge
+    #   wrong               - visibly incorrect on first review (wrong file, wrong logic,
+    #                         doesn't build) before any test layer ran
+    outcome: null             # accepted | caught-by-test | superficially-right | wrong
+    caught_by: null           # First failing layer: smoke | unit | golden | invariant | reviewer | maintainer | post-merge | null if accepted
+    notes: ""
+
+root_cause:
+  summary: ""                 # One line
+  found_by: null              # ai | human | joint
+
+human_time: null              # <30m | 30m-2h | 2h-4h | 4h-8h | 1d-2d | >2d
+
+scientific_impact:
+  outputs_changed: false
+  changes:                    # One per command/file/column whose values changed
+    - command: ""             # e.g. percolator
+      output: ""              # e.g. percolator.target.psms.txt
+      column: ""              # e.g. q-value
+      max_abs_delta: null
+      max_rel_delta: null
+      rows_affected: null
+      rows_total: null
+      evidence: null          # Path to diff under research/evidence/issue-<N>/diff/
+  published_results_risk: null  # none | low | possible | likely
+  risk_rationale: ""
+
+review:
+  pr: null                    # PR URL
+  rounds: 0                   # Number of review rounds before merge
+  feedback: ""                # Summary of maintainer feedback (roles, not names)
+
+notes: ""

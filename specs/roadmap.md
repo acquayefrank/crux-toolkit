@@ -16,6 +16,11 @@ criteria):
 - [ ] Golden outputs pass on all CI platforms (once Phase 3 exists).
 - [ ] `doc/user/release-notes.html` updated, including any change to output
       values.
+- [ ] Per-issue research record filled in
+      (`research/issues/issue-<N>.yaml`, per `research/protocol.md`). For
+      result-affecting changes, before/after outputs and diffs are archived
+      in `research/evidence/issue-<N>/`, and the redacted AI transcripts are
+      committed.
 - [ ] The issue is closed with a link to the PR.
 
 Legend: 🔴 silent wrong results · 🟠 crash/data loss · 🟡 build/platform ·
@@ -24,6 +29,11 @@ Legend: 🔴 silent wrong results · 🟠 crash/data loss · 🟡 build/platform
 ---
 
 ## Stage A — Safety net (no issue fixes until this exists)
+
+### Phase 0 — Preregister the study
+- Commit `research/protocol.md` before any Phase 1 work starts, so git
+  timestamps it.
+- **Done when:** the protocol commit comes before the first Phase 1 commit.
 
 ### Phase 1 — Triage snapshot
 - Re-run each open issue's reproduction on current `master`. Tag each one
